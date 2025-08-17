@@ -88,11 +88,13 @@ export default function TicTacToePage() {
     setMessageInput("");
   };
 
+  const opponentSymbol = playerSymbol === "X" ? "O" : "X";
+
   return (
-    <div className="flex flex-col sm:flex-row min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Main Game Area */}
       <div className="flex-1 flex flex-col items-center justify-center p-4">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-4 sm:mb-6 text-gray-800 text-center">
+        <h1 className="text-4xl font-bold mb-6 text-gray-800">
           Tic Tac Toe Multiplayer
         </h1>
 
@@ -102,11 +104,11 @@ export default function TicTacToePage() {
 
         {hasJoinedRoom && (
           <>
-            <p className="mb-4 text-gray-700 text-center">
+            <p className="mb-4 text-gray-700">
               You are playing as {playerSymbol}
             </p>
             <Board board={board} onCellClick={handleClick} />
-            <h2 className="mt-4 sm:mt-6 text-lg sm:text-xl font-semibold text-gray-700 text-center">
+            <h2 className="mt-6 text-xl font-semibold text-gray-700">
               {winner
                 ? `Winner: ${winner}`
                 : `Next Player: ${isXNext ? "X" : "O"}`}
@@ -122,14 +124,12 @@ export default function TicTacToePage() {
       </div>
 
       {/* Sidebar Chat */}
-      {hasJoinedRoom && (
-        <div className="w-full sm:w-80 border-t sm:border-t-0 sm:border-l border-gray-300 bg-white p-4 flex flex-col">
-          <h2 className="text-xl font-bold mb-2 text-black text-center sm:text-left">
-            Room Chat
-          </h2>
+      {hasJoinedRoom ? (
+        <div className="w-80 border-l border-gray-300 bg-white p-4 flex flex-col">
+          <h2 className="text-xl font-bold mb-2 text-black">Room Chat</h2>
           <div className="flex-1 overflow-y-auto mb-2 space-y-1">
             {messages.map((msg, idx) => (
-              <div key={idx} className="p-2 rounded bg-gray-100 text-black">
+              <div key={idx} className="p-1 rounded bg-gray-100 text-black ">
                 {msg}
               </div>
             ))}
@@ -140,23 +140,23 @@ export default function TicTacToePage() {
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              className="flex-1 px-2 py-2 border rounded text-black"
+              className="flex-1 px-2 py-1 border rounded text-black"
               placeholder="Type a message..."
             />
             <button
               onClick={sendMessage}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              className="px-4 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
             >
               Send
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Winner/Loser Modal */}
+      {/* Winner Modal */}
       {winner && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white p-6 sm:p-8 rounded-lg shadow-lg text-center max-w-sm w-full">
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-sm w-full">
             <h2 className="text-2xl font-bold mb-4 text-green-600">
               🎉 {winner === playerSymbol ? "You Win!" : "You Lose!"} 🎉
             </h2>
