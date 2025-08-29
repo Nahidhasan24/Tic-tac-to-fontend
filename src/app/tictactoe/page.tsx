@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Board from "@/components/Board";
 import RoomJoin from "@/components/RoomJoin";
 import { calculateWinner } from "@/utils/game";
 import { getSocket } from "@/lib/socket";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function TicTacToePage() {
   const [board, setBoard] = useState<(null | "X" | "O")[]>(Array(9).fill(null));
@@ -15,30 +16,32 @@ export default function TicTacToePage() {
   const [winner, setWinner] = useState<string | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
   const [messageInput, setMessageInput] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [stats, setStats] = useState({ wins: 0, losses: 0, draws: 0 });
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const socket = getSocket();
 
   useEffect(() => {
     socket.on("assignSymbol", (symbol: "X" | "O") => setPlayerSymbol(symbol));
-
     socket.on("boardUpdated", ({ board, isXNext }) => {
       setBoard(board);
       setIsXNext(isXNext);
       setWinner(calculateWinner(board));
     });
-
     socket.on("gameRestarted", () => {
       setBoard(Array(9).fill(null));
       setIsXNext(true);
       setWinner(null);
     });
-
     socket.on("receiveMessage", (msg: string) => {
       setMessages((prev) => [...prev, msg]);
+      scrollToBottom();
     });
-
     socket.on("playerJoined", (data) => {
-      alert(data);
+      setMessages((prev) => [...prev, `System: ${data}`]);
+      scrollToBottom();
     });
 
     return () => {
@@ -49,6 +52,24 @@ export default function TicTacToePage() {
       socket.off("playerJoined");
     };
   }, [socket]);
+
+  // Update stats
+  useEffect(() => {
+    if (winner) {
+      if (winner === playerSymbol) {
+        setStats((prev) => ({ ...prev, wins: prev.wins + 1 }));
+      } else if (winner !== "Draw") {
+        setStats((prev) => ({ ...prev, losses: prev.losses + 1 }));
+      }
+    } else if (!winner && board.every((cell) => cell !== null)) {
+      // Draw
+      setStats((prev) => ({ ...prev, draws: prev.draws + 1 }));
+    }
+  }, [winner, board, playerSymbol]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const joinRoom = () => {
     if (!roomId) return;
@@ -77,6 +98,7 @@ export default function TicTacToePage() {
   };
 
   const restartGame = () => {
+    if (!winner) return; // Prevent restart while game running
     socket.emit("restartGame", roomId);
     setBoard(Array(9).fill(null));
     setIsXNext(true);
@@ -91,102 +113,183 @@ export default function TicTacToePage() {
       message: `Opponent: ${messageInput}`,
     });
     setMessageInput("");
+    scrollToBottom();
   };
 
-  const opponentSymbol = playerSymbol === "X" ? "O" : "X";
-
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-b from-indigo-50 to-indigo-100 transition-all duration-500">
       {/* Main Game Area */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4">
-        <h1 className="text-4xl font-bold mb-6 text-gray-800">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 relative">
+        <motion.h1
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          className="text-4xl md:text-5xl font-extrabold mb-6 text-indigo-800 text-center drop-shadow-md"
+        >
           Tic Tac Toe Multiplayer
-        </h1>
+        </motion.h1>
 
         {!hasJoinedRoom && (
           <RoomJoin
             roomId={roomId}
             setRoomId={setRoomId}
-            onSelectPlayer={(player) => {
-              setPlayerSymbol(player);
-            }}
+            onSelectPlayer={(player) => setPlayerSymbol(player)}
             joinRoom={joinRoom}
           />
         )}
 
         {hasJoinedRoom && (
-          <>
-            <p className="mb-4 text-gray-700">
-              You are playing as {playerSymbol}
-              <h3 className="b">Room Id : {roomId}</h3>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col items-center w-full"
+          >
+            <p className="mb-2 text-gray-700 text-lg text-center">
+              You are <span className="font-bold">{playerSymbol}</span> | Room:{" "}
+              <span className="font-mono font-semibold">{roomId}</span>
             </p>
-            <Board board={board} onCellClick={handleClick} />
-            <h2 className="mt-6 text-xl font-semibold text-gray-700">
+
+            {/* Stats */}
+            <div className="flex justify-center gap-6 mt-2 text-gray-700 text-lg">
+              <p>
+                Wins: <span className="font-bold">{stats.wins}</span>
+              </p>
+              <p>
+                Losses: <span className="font-bold">{stats.losses}</span>
+              </p>
+              <p>
+                Draws: <span className="font-bold">{stats.draws}</span>
+              </p>
+            </div>
+
+            {/* Board */}
+            <div className="w-full max-w-xs md:max-w-sm mt-4">
+              <Board board={board} onCellClick={handleClick} />
+            </div>
+
+            <h2 className="mt-6 text-lg md:text-xl font-semibold text-gray-700 text-center">
               {winner
                 ? `Winner: ${winner}`
+                : board.every((cell) => cell !== null)
+                ? "Draw"
                 : `Next Player: ${isXNext ? "X" : "O"}`}
             </h2>
-            <button
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={restartGame}
-              className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
+              disabled={!winner}
+              className={`mt-4 px-6 py-2 rounded-xl shadow-lg transition
+                ${
+                  !winner
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                }`}
             >
               Restart Game
+            </motion.button>
+
+            {/* Toggle Chat Button */}
+            <button
+              onClick={() => setChatOpen(!chatOpen)}
+              className="fixed bottom-4 right-4 bg-indigo-600 text-white p-3 rounded-full shadow-xl md:hidden hover:bg-indigo-700 transition z-50"
+            >
+              💬
             </button>
-          </>
+          </motion.div>
         )}
       </div>
 
-      {/* Sidebar Chat */}
-      {hasJoinedRoom ? (
-        <div className="w-60 sm:w-1/4 md:w-2/3 lg:w-1/2 xl:w-1/3 max-w-md border-l border-gray-300 bg-white p-4 flex flex-col">
-          <h2 className="text-xl font-bold mb-2 text-black">Room Chat</h2>
+      {/* Chat Sidebar (Collapsible on mobile) */}
+      <AnimatePresence>
+        {hasJoinedRoom && chatOpen && (
+          <motion.div
+            initial={{ x: "100%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            className="fixed top-0 right-0 h-full w-80 max-w-xs bg-white border-l border-gray-300 p-4 shadow-2xl z-40 flex flex-col md:relative md:translate-x-0 md:w-80 md:shadow-none"
+          >
+            <h2 className="text-xl md:text-2xl font-bold mb-4 text-indigo-700 text-center md:text-left">
+              Room Chat
+            </h2>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto mb-2 space-y-1">
-            {messages.map((msg, idx) => (
-              <div key={idx} className="p-1 rounded bg-gray-100 text-black">
-                {msg}
-              </div>
-            ))}
-          </div>
+            <div className="flex-1 overflow-y-auto mb-2 space-y-2 p-2 bg-indigo-50 rounded-lg shadow-inner">
+              {messages.map((msg, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.05 }}
+                  className={`p-2 rounded-lg break-words max-w-xs ${
+                    msg.startsWith("You")
+                      ? "bg-indigo-100 text-indigo-900 self-end"
+                      : msg.startsWith("System")
+                      ? "bg-gray-200 text-gray-700 self-center"
+                      : "bg-indigo-200 text-indigo-900 self-start"
+                  }`}
+                >
+                  {msg}
+                </motion.div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
 
-          {/* Input + Button */}
-          <div className="flex-row m-2">
-            <input
-              type="text"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              className="flex-1 px-2 py-1 border rounded text-black"
-              placeholder="Type a message..."
-            />
-
-            <button
-              onClick={sendMessage}
-              className="px-4 py-1 mt-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      ) : null}
+            <div className="flex flex-col mt-2 gap-2">
+              <input
+                type="text"
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                className="px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none text-gray-800 w-full"
+                placeholder="Type a message..."
+              />
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={sendMessage}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition w-full"
+              >
+                Send
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Winner Modal */}
-      {winner && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-sm w-full">
-            <h2 className="text-2xl font-bold mb-4 text-green-600">
-              🎉 {winner === playerSymbol ? "You Win!" : "You Lose!"} 🎉
-            </h2>
-            <button
-              onClick={restartGame}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
+      <AnimatePresence>
+        {winner && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl text-center w-full max-w-xs md:max-w-sm"
             >
-              Play Again
-            </button>
-          </div>
-        </div>
-      )}
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-green-600 animate-pulse">
+                🎉 {winner === playerSymbol ? "You Win!" : "You Lose!"} 🎉
+              </h2>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={restartGame}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl shadow-lg hover:bg-indigo-700 transition"
+              >
+                Play Again
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
