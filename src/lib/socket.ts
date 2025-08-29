@@ -4,8 +4,8 @@ let socket: Socket;
 
 export const getSocket = () => {
   if (!socket) {
-    // socket = io("https://tic-tac-to-backend.onrender.com");\
-    socket = io("http://localhost:4000");
+    socket = io("https://tic-tac-to-backend.onrender.com");
+    // socket = io("http://localhost:4000");
   }
   return socket;
 };
