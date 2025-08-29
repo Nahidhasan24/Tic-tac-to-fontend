@@ -37,17 +37,22 @@ export default function TicTacToePage() {
       setMessages((prev) => [...prev, msg]);
     });
 
+    socket.on("playerJoined", (data) => {
+      alert(data);
+    });
+
     return () => {
       socket.off("assignSymbol");
       socket.off("boardUpdated");
       socket.off("gameRestarted");
       socket.off("receiveMessage");
+      socket.off("playerJoined");
     };
   }, [socket]);
 
   const joinRoom = () => {
     if (!roomId) return;
-    socket.emit("joinRoom", roomId);
+    socket.emit("joinRoom", roomId, playerSymbol);
     setHasJoinedRoom(true);
   };
 
@@ -99,13 +104,21 @@ export default function TicTacToePage() {
         </h1>
 
         {!hasJoinedRoom && (
-          <RoomJoin roomId={roomId} setRoomId={setRoomId} joinRoom={joinRoom} />
+          <RoomJoin
+            roomId={roomId}
+            setRoomId={setRoomId}
+            onSelectPlayer={(player) => {
+              setPlayerSymbol(player);
+            }}
+            joinRoom={joinRoom}
+          />
         )}
 
         {hasJoinedRoom && (
           <>
             <p className="mb-4 text-gray-700">
               You are playing as {playerSymbol}
+              <h3 className="b">Room Id : {roomId}</h3>
             </p>
             <Board board={board} onCellClick={handleClick} />
             <h2 className="mt-6 text-xl font-semibold text-gray-700">
@@ -125,16 +138,20 @@ export default function TicTacToePage() {
 
       {/* Sidebar Chat */}
       {hasJoinedRoom ? (
-        <div className="w-80 border-l border-gray-300 bg-white p-4 flex flex-col">
+        <div className="w-60 sm:w-1/4 md:w-2/3 lg:w-1/2 xl:w-1/3 max-w-md border-l border-gray-300 bg-white p-4 flex flex-col">
           <h2 className="text-xl font-bold mb-2 text-black">Room Chat</h2>
+
+          {/* Messages */}
           <div className="flex-1 overflow-y-auto mb-2 space-y-1">
             {messages.map((msg, idx) => (
-              <div key={idx} className="p-1 rounded bg-gray-100 text-black ">
+              <div key={idx} className="p-1 rounded bg-gray-100 text-black">
                 {msg}
               </div>
             ))}
           </div>
-          <div className="flex gap-2">
+
+          {/* Input + Button */}
+          <div className="flex-row m-2">
             <input
               type="text"
               value={messageInput}
@@ -143,9 +160,10 @@ export default function TicTacToePage() {
               className="flex-1 px-2 py-1 border rounded text-black"
               placeholder="Type a message..."
             />
+
             <button
               onClick={sendMessage}
-              className="px-4 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              className="px-4 py-1 mt-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
             >
               Send
             </button>
