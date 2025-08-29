@@ -18,6 +18,8 @@ export default function TicTacToePage() {
   const [messageInput, setMessageInput] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [stats, setStats] = useState({ wins: 0, losses: 0, draws: 0 });
+  const [startingPlayer, setStartingPlayer] = useState<"X" | "O">("X");
+  const [playerCount, setPlayerCount] = useState(1);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socket = getSocket();
@@ -30,17 +32,28 @@ export default function TicTacToePage() {
       setIsXNext(isXNext);
       setWinner(calculateWinner(board));
     });
-    socket.on("gameRestarted", () => {
+
+    socket.on("gameRestarted", ({ nextStarter }) => {
       setBoard(Array(9).fill(null));
-      setIsXNext(true);
+      setIsXNext(nextStarter === "X");
       setWinner(null);
+      setStartingPlayer(nextStarter);
     });
+
     socket.on("receiveMessage", (msg: string) => {
       setMessages((prev) => [...prev, msg]);
       scrollToBottom();
     });
+
     socket.on("playerJoined", (data) => {
-      setMessages((prev) => [...prev, `System: ${data}`]);
+      setMessages((prev) => [...prev, `System: ${data.message}`]);
+      setPlayerCount(data.count ?? playerCount);
+      scrollToBottom();
+    });
+
+    socket.on("playerLeft", (data) => {
+      setMessages((prev) => [...prev, `System: ${data.message}`]);
+      setPlayerCount(data.count ?? playerCount);
       scrollToBottom();
     });
 
@@ -50,20 +63,22 @@ export default function TicTacToePage() {
       socket.off("gameRestarted");
       socket.off("receiveMessage");
       socket.off("playerJoined");
+      socket.off("playerLeft");
     };
-  }, [socket]);
+  }, [socket, playerCount]);
 
-  // Update stats
+  // Update stats after game ends
   useEffect(() => {
-    if (winner) {
-      if (winner === playerSymbol)
-        setStats((prev) => ({ ...prev, wins: prev.wins + 1 }));
-      else if (winner !== "Draw")
-        setStats((prev) => ({ ...prev, losses: prev.losses + 1 }));
-    } else if (!winner && board.every((cell) => cell !== null)) {
+    if (!winner) return;
+
+    if (winner === "Draw") {
       setStats((prev) => ({ ...prev, draws: prev.draws + 1 }));
+    } else if (winner === playerSymbol) {
+      setStats((prev) => ({ ...prev, wins: prev.wins + 1 }));
+    } else {
+      setStats((prev) => ({ ...prev, losses: prev.losses + 1 }));
     }
-  }, [winner, board, playerSymbol]);
+  }, [winner, playerSymbol]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -96,11 +111,26 @@ export default function TicTacToePage() {
   };
 
   const restartGame = () => {
-    if (!winner) return; // Prevent restart while game running
-    socket.emit("restartGame", roomId);
+    if (!winner) return; // Prevent restart during active game
+
+    let nextStarter: "X" | "O" = startingPlayer;
+
+    if (winner === "Draw") {
+      nextStarter = startingPlayer;
+    } else if (winner === playerSymbol) {
+      // Player won → opponent goes first
+      nextStarter = playerSymbol === "X" ? "O" : "X";
+    } else {
+      // Player lost → they go first
+      nextStarter = playerSymbol;
+    }
+
+    setStartingPlayer(nextStarter);
     setBoard(Array(9).fill(null));
-    setIsXNext(true);
+    setIsXNext(nextStarter === "X");
     setWinner(null);
+
+    socket.emit("restartGame", roomId, nextStarter);
   };
 
   const sendMessage = () => {
@@ -145,7 +175,8 @@ export default function TicTacToePage() {
           >
             <p className="mb-2 text-gray-700 text-lg text-center">
               You are <span className="font-bold">{playerSymbol}</span> | Room:{" "}
-              <span className="font-mono font-semibold">{roomId}</span>
+              <span className="font-mono font-semibold">{roomId}</span> |
+              Players: <span className="font-bold">{playerCount}</span>
             </p>
 
             {/* Stats */}
