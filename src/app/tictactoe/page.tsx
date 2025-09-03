@@ -72,6 +72,7 @@ export default function TicTacToePage() {
     if (!winner) return;
 
     if (winner === "Draw") {
+      restartGame();
       setStats((prev) => ({ ...prev, draws: prev.draws + 1 }));
     } else if (winner === playerSymbol) {
       setStats((prev) => ({ ...prev, wins: prev.wins + 1 }));
